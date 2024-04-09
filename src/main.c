@@ -16,8 +16,9 @@
 
 /* This example will show you how to set properties for a certain camera */
 
-#include "tcam-property-1.0.h" /* gobject introspection interface */
+#include <tcam-property-1.0.h> /* gobject introspection interface */
 
+#include <Tcam-1.0.h>
 #include <gst/gst.h>
 #include <stdio.h> /* printf and putchar */
 
@@ -61,6 +62,44 @@ void print_enum_property(GstElement* source, const char* name)
     g_object_unref(property_base);
 }
 
+void print_float_property(GstElement* source, const char* name)
+{
+    /* this is only a sample not all properties will be set here */
+
+    GError* err = NULL;
+    TcamPropertyBase* property_base = tcam_property_provider_get_tcam_property(TCAM_PROPERTY_PROVIDER(source),
+                                                                               name,
+                                                                               &err);
+
+    if (err)
+    {
+        printf("Error while retrieving property: %s\n", err->message);
+        g_error_free(err);
+        err = NULL;
+    }
+
+    if (tcam_property_base_get_property_type(property_base) != TCAM_PROPERTY_TYPE_FLOAT)
+    {
+        printf("%s has wrong type. This should not happen.\n", name);
+    }
+    else
+    {
+        TcamPropertyFloat* property_float = TCAM_PROPERTY_FLOAT(property_base);
+        const float value = tcam_property_float_get_value(property_float, &err);
+
+        if (err)
+        {
+            printf("Error while retrieving property: %s\n", err->message);
+            g_error_free(err);
+            err = NULL;
+        }
+        else
+        {
+            printf("%s: %f\n", name, value);
+        }
+    }
+    g_object_unref(property_base);
+}
 
 void set_enum_property(GstElement* source, const char* name, const char* value)
 {
@@ -92,14 +131,43 @@ void set_enum_property(GstElement* source, const char* name, const char* value)
             g_error_free(err);
             err = NULL;
         }
-        else
-        {
-            printf("Set %s to %s\n", name, value);
-        }
     }
     g_object_unref(property_base);
 }
 
+void set_float_property(GstElement* source, const char* name, const float value)
+{
+    GError* err = NULL;
+    TcamPropertyBase* property_base = tcam_property_provider_get_tcam_property(TCAM_PROPERTY_PROVIDER(source),
+                                                                               name,
+                                                                               &err);
+
+    if (err)
+    {
+        printf("Error while retrieving property: %s\n", err->message);
+        g_error_free(err);
+        err = NULL;
+    }
+
+    if (tcam_property_base_get_property_type(property_base) != TCAM_PROPERTY_TYPE_FLOAT)
+    {
+        printf("ExposureAuto has wrong type. This should not happen.\n");
+    }
+    else
+    {
+        TcamPropertyFloat* float_property = TCAM_PROPERTY_FLOAT(property_base);
+
+        tcam_property_float_set_value(float_property, value, &err);
+
+        if (err)
+        {
+            printf("Error while setting property: %s\n", err->message);
+            g_error_free(err);
+            err = NULL;
+        }
+    }
+    g_object_unref(property_base);
+}
 
 
 int main(int argc, char* argv[])
@@ -112,14 +180,9 @@ int main(int argc, char* argv[])
        for further details
     */
     gst_debug_set_default_threshold(GST_LEVEL_WARNING);
-
     gst_init(&argc, &argv); // init gstreamer
-
     GError* err = NULL;
-
-    // this is a placeholder definition
-    // normally your pipeline would be defined here
-    GstElement* pipeline = gst_parse_launch("tcambin name=source  ! fakesink", &err);
+    GstElement* pipeline = gst_parse_launch("tcambin name=source  ! videoconvert ! ximagesink sync=false", &err);
 
     if (pipeline == NULL)
     {
@@ -150,39 +213,36 @@ int main(int argc, char* argv[])
     /*
       We print the properties for a before/after comparison,
      */
-    printf("Values before we change them:\n\n");
-
-    print_enum_property(source, "ExposureAuto");
-    print_enum_property(source, "GainAuto");
-
-    /*
-      We set the properties to other values
-     */
-    printf("\nChanging:\n\n");
-
-    set_enum_property(source, "ExposureAuto", "Off");
+    printf("Getting Gain...\n");
+    //print_enum_property(source, "Gain");
     set_enum_property(source, "GainAuto", "Off");
+    print_float_property(source, "Gain");
+    set_float_property(source, "Gain", 0.0);
+    print_float_property(source, "Gain");
+    //printf("\nChanging:\n\n");
 
-    /* alternatively you can get/set directly on the TCAM_PROPERTY_PROVIDER */
-    /* for this you need to know the type of the property you want to get/set */
 
-    /* tcam_property_provider_set_tcam_enumeration(TCAM_PROPERTY_PROVIDER(source), "ExposureAuto", "Off", &err); */
-    /* tcam_property_provider_set_tcam_integer(TCAM_PROPERTY_PROVIDER(source), "Brightness", 200, &err); */
-    /* tcam_property_provider_set_tcam_float(TCAM_PROPERTY_PROVIDER(source), "ExposureTime", 30000.0, &err); */
+    ///* alternatively you can get/set directly on the TCAM_PROPERTY_PROVIDER */
+    ///* for this you need to know the type of the property you want to get/set */
 
-    printf("\nValues after we changed them:\n\n");
+    ///* tcam_property_provider_set_tcam_enumeration(TCAM_PROPERTY_PROVIDER(source), "ExposureAuto", "Off", &err); */
+    ///* tcam_property_provider_set_tcam_integer(TCAM_PROPERTY_PROVIDER(source), "Brightness", 200, &err); */
+    ///* tcam_property_provider_set_tcam_float(TCAM_PROPERTY_PROVIDER(source), "ExposureTime", 30000.0, &err); */
+    //
 
-    /*
-      second print for the before/after comparison
-     */
-    print_enum_property(source, "ExposureAuto");
-    print_enum_property(source, "GainAuto");
+    //printf("\nValues after we changed them:\n\n");
 
-    /* cleanup, reset state */
-    gst_element_set_state(pipeline, GST_STATE_NULL);
+    ///*
+    //  second print for the before/after comparison
+    // */
+    //print_enum_property(source, "ExposureAuto");
+    //print_enum_property(source, "GainAuto");
 
-    gst_object_unref(source);
-    gst_object_unref(pipeline);
+    ///* cleanup, reset state */
+    //gst_element_set_state(pipeline, GST_STATE_NULL);
+
+    //gst_object_unref(source);
+    //gst_object_unref(pipeline);
 
     return 0;
 }

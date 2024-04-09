@@ -35,4 +35,13 @@ stdenv.mkDerivation {
     export NIX_CFLAGS_COMPILE+=" $(pkg-config --cflags gstreamer-1.0)"
   '';
 
+  buildPhase = ''
+    runHook preBuild
+    bear -- cmake --build .
+    runHook postBuild
+  '';
+
+  postInstall = ''
+    cp ./compile_commands.json $out
+  '';
 }
