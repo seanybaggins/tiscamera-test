@@ -7,9 +7,10 @@
 , bear
 , glib
 , gobject-introspection
+, makeWrapper
 }:
 
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   name = "tiscamera-test";
 
   src = ../../../..;
@@ -19,6 +20,7 @@ stdenv.mkDerivation {
     cmake
     pkg-config
     bear
+    makeWrapper
   ];
 
   buildInputs = [
@@ -33,6 +35,8 @@ stdenv.mkDerivation {
   preConfigure = ''
     export NIX_CFLAGS_COMPILE+=" $(pkg-config --cflags glib-2.0)"
     export NIX_CFLAGS_COMPILE+=" $(pkg-config --cflags gstreamer-1.0)"
+    #export NIX_CFLAGS_COMPILE+=" $(pkg-config --cflags gstreamer-video-1.0)"
+    export NIX_CFLAGS_COMPILE+=" $(pkg-config --cflags gobject-introspection-1.0)"
   '';
 
   buildPhase = ''
@@ -43,5 +47,8 @@ stdenv.mkDerivation {
 
   postInstall = ''
     cp ./compile_commands.json $out
+    
+    wrapProgram "$out/bin/${name}" --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "$GST_PLUGIN_SYSTEM_PATH_1_0"
   '';
+
 }

@@ -16,12 +16,16 @@
 
 /* This example will show you how to set properties for a certain camera */
 
+#include "gst/gstclock.h"
+#include "gst/gstelement.h"
 #include <tcam-property-1.0.h> /* gobject introspection interface */
 
 #include <Tcam-1.0.h>
 #include <gst/gst.h>
 #include <stdio.h> /* printf and putchar */
+#include <unistd.h>
 
+#include <assert.h>
 
 void print_enum_property(GstElement* source, const char* name)
 {
@@ -117,7 +121,7 @@ void set_enum_property(GstElement* source, const char* name, const char* value)
 
     if (tcam_property_base_get_property_type(property_base) != TCAM_PROPERTY_TYPE_ENUMERATION)
     {
-        printf("ExposureAuto has wrong type. This should not happen.\n");
+        printf("%s has wrong type. This should not happen.\n", name);
     }
     else
     {
@@ -151,7 +155,7 @@ void set_float_property(GstElement* source, const char* name, const float value)
 
     if (tcam_property_base_get_property_type(property_base) != TCAM_PROPERTY_TYPE_FLOAT)
     {
-        printf("ExposureAuto has wrong type. This should not happen.\n");
+        printf("%s has wrong type. This should not happen.\n", name);
     }
     else
     {
@@ -169,6 +173,21 @@ void set_float_property(GstElement* source, const char* name, const float value)
     g_object_unref(property_base);
 }
 
+void get_input(const char *prompt, int min, int max, int *value) {
+    int input;
+    int status;
+    do {
+        printf("%s", prompt);
+        status = scanf("%d", &input);
+        while(getchar() != '\n'); // Clear input buffer
+
+        if (status != 1 || input < min || input > max) {
+            printf("Invalid input. Please enter a value between %d and %d.\n", min, max);
+        }
+    } while (status != 1 || input < min || input > max);
+
+    *value = input;
+}
 
 int main(int argc, char* argv[])
 {
@@ -182,7 +201,20 @@ int main(int argc, char* argv[])
     gst_debug_set_default_threshold(GST_LEVEL_WARNING);
     gst_init(&argc, &argv); // init gstreamer
     GError* err = NULL;
-    GstElement* pipeline = gst_parse_launch("tcambin name=source  ! videoconvert ! ximagesink sync=false", &err);
+    GstElement* pipeline =
+        gst_parse_launch("tcambin name=source"
+                         " ! video/x-raw,format=BGRx,width=640,height=480,framerate=30/1"
+                         " ! videorate"
+                         " ! video/x-raw,framerate=1/2"
+                         " ! identity sync=true"
+                         " ! timeoverlay"
+                         " ! tee name=t ! queue"
+                         "      ! ximagesink"
+                         " t. ! queue"
+                         "      ! jpegenc"
+                         "      ! multifilesink location=images/img_%06d.jpg",
+                         &err);
+
 
     if (pipeline == NULL)
     {
@@ -205,44 +237,45 @@ int main(int argc, char* argv[])
 
         g_object_set_property(G_OBJECT(source), "serial", &val);
     }
-
     gst_element_set_state(pipeline, GST_STATE_READY);
-
-    /* Device is now in a state for interactions */
-
-    /*
-      We print the properties for a before/after comparison,
-     */
-    printf("Getting Gain...\n");
-    //print_enum_property(source, "Gain");
     set_enum_property(source, "GainAuto", "Off");
-    print_float_property(source, "Gain");
-    set_float_property(source, "Gain", 0.0);
-    print_float_property(source, "Gain");
-    //printf("\nChanging:\n\n");
+    print_enum_property(source, "GainAuto");
+    set_enum_property(source, "ExposureAuto", "Off");
 
+    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+    int exposure = 0;
+    int gain = 0;
+    set_float_property(source, "Gain", (float)gain);
+    char choice = 'a';
 
-    ///* alternatively you can get/set directly on the TCAM_PROPERTY_PROVIDER */
-    ///* for this you need to know the type of the property you want to get/set */
+    while (choice != 'q') {
+        printf("Edit Exposure (e) or Gain (g): ");
+        
+        int _ret = scanf("%c", &choice);
+        while(getchar() != '\n'); // Clear input buffer after reading choice
 
-    ///* tcam_property_provider_set_tcam_enumeration(TCAM_PROPERTY_PROVIDER(source), "ExposureAuto", "Off", &err); */
-    ///* tcam_property_provider_set_tcam_integer(TCAM_PROPERTY_PROVIDER(source), "Brightness", 200, &err); */
-    ///* tcam_property_provider_set_tcam_float(TCAM_PROPERTY_PROVIDER(source), "ExposureTime", 30000.0, &err); */
-    //
-
-    //printf("\nValues after we changed them:\n\n");
-
-    ///*
-    //  second print for the before/after comparison
-    // */
-    //print_enum_property(source, "ExposureAuto");
-    //print_enum_property(source, "GainAuto");
-
-    ///* cleanup, reset state */
-    //gst_element_set_state(pipeline, GST_STATE_NULL);
-
-    //gst_object_unref(source);
-    //gst_object_unref(pipeline);
+        switch (choice) {
+            case 'e':
+            case 'E': // Handle both upper and lower case
+                get_input("Enter Exposure 1-1,000,000 us: ", 1, 1000000, &exposure);
+                set_float_property(source, "ExposureTime", (float)exposure);
+                print_float_property(source, "ExposureTime");
+                break;
+            case 'g':
+            case 'G': // Handle both upper and lower case
+                get_input("Enter Gain 0-48 db: ", 0, 48, &gain);
+                set_float_property(source, "Gain", (float) gain);
+                print_float_property(source, "Gain");
+                break;
+            case 'q':
+            case 'Q':
+                printf("Exiting Program\n");
+                break;
+            default:
+                printf("Invalid choice. Please enter 'e' for Exposure or 'g' for Gain.\n");
+                break;
+        }
+    }
 
     return 0;
 }
